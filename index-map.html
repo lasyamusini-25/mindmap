@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Mind Map</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #22252C; /* Dark background from reference image */
+            color: #E0E0E0; /* Light text */
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden; /* Hide scrollbars */
+        }
+        #mindmap-container {
+            width: 100%;
+            height: 90vh; /* Make it responsive to viewport height */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible; /* Allow elements to draw outside SVG bounds if needed */
+            cursor: grab; /* Default cursor for panning */
+        }
+        svg.grabbing {
+            cursor: grabbing;
+        }
+        .node-group {
+            cursor: pointer;
+            transition: transform 0.4s ease-out; /* Smooth transition for node movement */
+            transform-origin: center center; /* Ensure transformations are from the center */
+        }
+        .node-rect {
+            fill: #446E6C; /* Node background color from reference image */
+            stroke: #6AA19E; /* Node border color from reference image */
+            stroke-width: 2px;
+            transition: all 0.3s ease-out; /* Smooth transition for node appearance */
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4)); /* Add subtle shadow */
+        }
+        .node-rect.root {
+            fill: #724C9C; /* Root node color from reference image */
+            stroke: #9D8FDC; /* Root node border color */
+        }
+        .node-rect:hover {
+            fill: #588582; /* Slightly lighter hover effect for child nodes */
+            stroke: #7BB8B5;
+            transform: translateY(-2px); /* Slight lift on hover */
+        }
+        .node-rect.root:hover {
+            fill: #8F6BC8; /* Slightly lighter hover effect for root node */
+            stroke: #B4A9E8;
+        }
+        .node-text {
+            fill: #E0E0E0;
+            font-size: 14px;
+            font-weight: 500;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none; /* Allow click to pass through to rect */
+            user-select: none; /* Prevent text selection */
+        }
+        .connection-line {
+            stroke: #8C8F9A; /* Line color from reference image */
+            stroke-width: 2px;
+            fill: none;
+            transition: all 0.4s ease-out; /* Smooth transition for lines */
+        }
+        .arrow-icon {
+            fill: #E0E0E0;
+            transition: transform 0.3s ease-out;
+            transform-origin: center center;
+        }
+        .arrow-icon.expanded {
+            transform: rotate(90deg); /* Rotate arrow when expanded */
+        }
+        .arrow-icon.has-children {
+            opacity: 1;
+        }
+        .arrow-icon:not(.has-children) {
+            opacity: 0; /* Hide arrow if no children */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 p-4">
+
+    <div id="mindmap-container" class="w-full h-screen flex items-center justify-center">
+        <svg id="mindmap-svg"></svg>
+    </div>
+
+    <script>
+        // Sample data for the mind map, structured according to the NotebookLM Mind Map (1).jpg reference
+        const mindMapData = {
+            id: 'root',
+            name: 'Network Protocols & Management',
+            children: [
+                {
+                    id: 'process-delivery',
+                    name: 'Process to Process Delivery',
+                    children: [
+                        {
+                            id: 'definition',
+                            name: 'Definition',
+                            children: [
+                                { id: 'app-program-on-local-host', name: 'Application program on local host' },
+                                { id: 'internet-layer-responsibility', name: 'Internet Layer responsibility' }
+                            ]
+                        },
+                        {
+                            id: 'client-server',
+                            name: 'Client/Server Paradigm',
+                            children: [
+                                { id: 'client', name: 'Client' },
+                                { id: 'server', name: 'Server' },
+                                { id: 'socket-state', name: 'State of the socket (i.e., (Daytime))',
+                                    children: [
+                                        { id: 'tcp-handshake', name: 'TCP Handshake' },
+                                        { id: 'udp-connectionless', name: 'UDP Connectionless' }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            id: 'comm-req',
+                            name: 'Communication Requirements',
+                            children: [
+                                { id: 'local-host', name: 'Local host' },
+                                { id: 'local-process', name: 'Local process' },
+                                { id: 'remote-host', name: 'Remote host' },
+                                { id: 'remote-process', name: 'Remote process',
+                                    children: [
+                                        { id: 'process-id', name: 'Process ID' },
+                                        { id: 'port-mapping', name: 'Port Mapping' }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            id: 'addressing',
+                            name: 'Addressing',
+                            children: [
+                                { id: 'port-number-address', name: 'Port Number / Port Address' },
+                                { id: 'id-16-bit-integers', name: 'ID 16-bit integers (0-65535)' },
+                                { id: 'destination-port', name: 'Destination Port for Delivery' },
+                                { id: 'client-port-numbers', name: 'Client Port numbers' },
+                                { id: 'known-port-well-known', name: 'Known Port, Well Known',
+                                    children: [
+                                        { id: 'http-port', name: 'HTTP (80)' },
+                                        { id: 'https-port', name: 'HTTPS (443)' },
+                                        { id: 'ftp-port', name: 'FTP (21)' }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            id: 'socket',
+                            name: 'Socket Address',
+                            children: [
+                                { id: 'ip-address-port', name: 'IP address : Port number' },
+                                { id: 'udp-tcp-service-ports', name: 'UDP or TCP Service Port Numbers' },
+                                { id: 'client-server-socket-addresses', name: 'Client and server socket addresses',
+                                    children: [
+                                        { id: 'client-socket', name: 'Client Socket' },
+                                        { id: 'server-socket', name: 'Server Socket' }
+                                    ]
+                                }
+                            ]
+                        },
+                    ],
+                },
+                {
+                    id: 'transport-layer',
+                    name: 'Transport Layer Protocols',
+                    children: [
+                        { id: 'tcp', name: 'TCP',
+                            children: [
+                                { id: 'tcp-features', name: 'Features',
+                                    children: [
+                                        { id: 'reliable', name: 'Reliable' },
+                                        { id: 'ordered', name: 'Ordered' },
+                                        { id: 'flow-control', name: 'Flow Control' }
+                                    ]
+                                }
+                            ]
+                        },
+                        { id: 'udp', name: 'UDP',
+                            children: [
+                                { id: 'udp-features', name: 'Features',
+                                    children: [
+                                        { id: 'unreliable', name: 'Unreliable' },
+                                        { id: 'fast', name: 'Fast' }
+                                    ]
+                                }
+                            ]
+                        },
+                        { id: 'sctp', name: 'SCTP',
+                          children: [
+                            { id: 'sctp-flow', name: 'SCTP Flow Control' },
+                            { id: 'sctp-cong', name: 'SCTP Congestion Control' }
+                          ]
+                        },
+                    ],
+                },
+                { id: 'congestion-control', name: 'Congestion Control',
+                    children: [
+                        { id: 'tcp-congestion', name: 'TCP Congestion Control' },
+                        { id: 'congestion-avoidance', name: 'Congestion Avoidance' }
+                    ]
+                },
+                {
+                    id: 'dns',
+                    name: 'Domain Name System (DNS)',
+                    children: [
+                        { id: 'dns-lookup', name: 'DNS Lookup Process' },
+                        { id: 'dns-records', name: 'DNS Record Types',
+                            children: [
+                                { id: 'a-record', name: 'A Record' },
+                                { id: 'mx-record', name: 'MX Record' },
+                                { id: 'cname-record', name: 'CNAME Record' }
+                            ]
+                        },
+                        { id: 'dns-sec', name: 'DNS Security (DNSSEC)',
+                          children: [
+                            { id: 'dnssec-overview', name: 'Overview' },
+                            { id: 'dnssec-keys', name: 'Key Management' }
+                          ]
+                        },
+                    ],
+                },
+                { id: 'telnet', name: 'Remote Logging (TELNET)',
+                    children: [
+                        { id: 'telnet-security', name: 'Security Concerns' },
+                        { id: 'telnet-alternatives', name: 'Alternatives (SSH)' }
+                    ]
+                },
+                { id: 'email', name: 'Electronic Mail (E-mail)',
+                    children: [
+                        { id: 'smtp', name: 'SMTP' },
+                        { id: 'pop3', name: 'POP3' },
+                        { id: 'imap', name: 'IMAP' }
+                    ]
+                },
+                { id: 'ftp', name: 'File Transfer Protocol (FTP)',
+                    children: [
+                        { id: 'ftp-active', name: 'Active Mode' },
+                        { id: 'ftp-passive', name: 'Passive Mode' }
+                    ]
+                },
+                { id: 'www', name: 'World Wide Web (WWW)',
+                    children: [
+                        { id: 'web-servers', name: 'Web Servers' },
+                        { id: 'browsers', name: 'Browsers' }
+                    ]
+                },
+                { id: 'http', name: 'Hypertext Transfer Protocol (HTTP)',
+                    children: [
+                        { id: 'http-methods', name: 'Methods (GET, POST)' },
+                        { id: 'http-status-codes', name: 'Status Codes' }
+                    ]
+                },
+                { id: 'snmp', name: 'Network Management: SNMP',
+                    children: [
+                        { id: 'snmp-agents', name: 'SNMP Agents' },
+                        { id: 'snmp-managers', name: 'SNMP Managers' }
+                    ]
+                },
+                { id: 'firewalls', name: 'Firewalls & Network Security',
+                  children: [
+                    { id: 'packet-filtering', name: 'Packet Filtering' },
+                    { id: 'proxy-firewall', name: 'Proxy Firewalls' },
+                    { id: 'vpn', name: 'Virtual Private Networks (VPNs)',
+                        children: [
+                            { id: 'ipsec', name: 'IPSec' },
+                            { id: 'ssl-vpn', name: 'SSL VPN' }
+                        ]
+                    }
+                  ]
+                },
+                {
+                    id: 'routing',
+                    name: 'Routing Protocols',
+                    children: [
+                        { id: 'rip', name: 'RIP' },
+                        { id: 'ospf', name: 'OSPF' },
+                        { id: 'bgp', name: 'BGP' }
+                    ]
+                }
+            ],
+        };
+
+        const svg = document.getElementById('mindmap-svg');
+        const NODE_WIDTH = 180;
+        const NODE_HEIGHT = 40;
+        const HORIZONTAL_SPACING = 300; // Increased spacing for more gap between node and sub-node
+        const VERTICAL_SPACING = 30;   // Spacing between sibling nodes
+
+        let currentPanX = 0; // Represents the user's pan offset
+        let currentPanY = 0;
+        let isDragging = false;
+        let startDragX, startDragY; // Mouse position when drag started
+
+        // Function to calculate text width for dynamic node sizing
+        function getTextWidth(text, font = '500 14px Inter') {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            context.font = font;
+            return context.measureText(text).width;
+        }
+
+        /**
+         * Recursively calculates the total vertical height each node's subtree occupies.
+         * This helps in preventing overlaps during the positioning phase.
+         * Also assigns an initial y-offset to children for relative positioning.
+         * @param {object} node - The current node.
+         */
+        function calculateSubtreeHeights(node) {
+            // Determine actual width based on text content, with a minimum
+            node.actualWidth = Math.max(NODE_WIDTH, getTextWidth(node.name) + 40); // Add padding for text
+
+            if (node.children && node.children.length > 0 && node.expanded) {
+                let currentYOffset = 0; // Relative Y offset for children within their parent's vertical span
+                node.children.forEach(child => {
+                    calculateSubtreeHeights(child); // Recursive call for children
+                    child.relativeYOffset = currentYOffset; // Store relative Y
+                    currentYOffset += child.subtreeHeight + VERTICAL_SPACING;
+                });
+                // Remove the last spacing as it's not between two children
+                node.subtreeHeight = currentYOffset - VERTICAL_SPACING;
+                // Ensure a minimum height if children are very small, to avoid negative spacing
+                if (node.children.length === 1 && node.children[0].subtreeHeight === NODE_HEIGHT) {
+                    node.subtreeHeight = NODE_HEIGHT;
+                }
+            } else {
+                node.subtreeHeight = NODE_HEIGHT; // Leaf node or collapsed node has only its own height
+            }
+        }
+
+        /**
+         * Second pass: Recursively positions nodes based on calculated subtree heights.
+         * @param {object} node - The current node.
+         * @param {number} x - The x-coordinate for the node.
+         * @param {number} y - The y-coordinate for the node (will be adjusted for centering).
+         * @param {number} depth - The depth of the node in the tree.
+         * @param {object} parent - The parent node.
+         */
+        function positionNodes(node, x, y, depth, parent) {
+            node.x = x;
+            node.depth = depth;
+            node.parent = parent;
+            node.isRoot = (depth === 0);
+
+            if (node.children && node.children.length > 0 && node.expanded) {
+                // Center the parent node vertically relative to its expanded children's vertical span
+                const firstChildRelativeY = node.children[0].relativeYOffset;
+                const lastChildRelativeY = node.children[node.children.length - 1].relativeYOffset;
+                const childrenMidpointRelativeY = (firstChildRelativeY + lastChildRelativeY + node.children[node.children.length - 1].subtreeHeight) / 2;
+                node.y = y - childrenMidpointRelativeY + (node.subtreeHeight / 2); // Adjust Y to center parent
+
+                node.children.forEach(child => {
+                    // Calculate child's absolute Y based on parent's adjusted Y and child's relative offset
+                    const childY = node.y - (node.subtreeHeight / 2) + (NODE_HEIGHT / 2) + child.relativeYOffset;
+                    positionNodes(child, x + HORIZONTAL_SPACING, childY, depth + 1, node);
+                });
+            } else {
+                node.y = y; // Leaf node or collapsed node keeps its assigned Y
+            }
+        }
+
+        // Function to flatten the tree into a list of visible nodes and connections
+        function getVisibleElements(node) {
+            const visibleNodes = [];
+            const visibleConnections = [];
+            const queue = [node];
+
+            while (queue.length > 0) {
+                const current = queue.shift();
+                visibleNodes.push(current);
+
+                if (current.parent) {
+                    visibleConnections.push({ source: current.parent, target: current });
+                }
+
+                if (current.children && current.expanded) {
+                    current.children.forEach(child => queue.push(child));
+                }
+            }
+            return { visibleNodes, visibleConnections };
+        }
+
+        // Render the mind map
+        function renderMindMap() {
+            // Clear previous elements from the SVG
+            svg.innerHTML = '';
+
+            // --- Layout Pass 1: Calculate Subtree Heights ---
+            // This pass determines the vertical space each node's subtree will occupy.
+            calculateSubtreeHeights(mindMapData);
+
+            // --- Layout Pass 2: Position Nodes ---
+            // This pass assigns final X, Y coordinates to each node based on subtree heights.
+            // Start positioning from the root (0, 0) initially.
+            positionNodes(mindMapData, 0, 0, 0, null);
+
+            // Get only the currently visible nodes and connections based on expanded state
+            const { visibleNodes, visibleConnections } = getVisibleElements(mindMapData);
+
+            // Calculate overall bounding box of the visible map to center it in the SVG
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            if (visibleNodes.length > 0) {
+                visibleNodes.forEach(node => {
+                    minX = Math.min(minX, node.x - node.actualWidth / 2);
+                    maxX = Math.max(maxX, node.x + node.actualWidth / 2);
+                    minY = Math.min(minY, node.y - NODE_HEIGHT / 2);
+                    maxY = Math.max(maxY, node.y + NODE_HEIGHT / 2);
+                });
+            } else {
+                // If no nodes are visible (e.g., empty data), default to origin
+                minX = maxX = 0;
+                minY = maxY = 0;
+            }
+
+            const mapWidth = maxX - minX;
+            const mapHeight = maxY - minY;
+
+            const svgWidth = svg.clientWidth;
+            const svgHeight = svg.clientHeight;
+
+            // Calculate the base translation to center the map
+            const baseTranslateX = svgWidth / 2 - (minX + mapWidth / 2);
+            const baseTranslateY = svgHeight / 2 - (minY + mapHeight / 2);
+
+            // Create a main group to hold all elements. This group will be transformed for panning.
+            const mainGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            // Apply both the base centering and the current accumulated pan offset
+            mainGroup.setAttribute('transform', `translate(${baseTranslateX + currentPanX}, ${baseTranslateY + currentPanY})`);
+            svg.appendChild(mainGroup);
+
+            // Render connections (curved lines) first, so nodes appear on top
+            visibleConnections.forEach(conn => {
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                const x1 = conn.source.x + conn.source.actualWidth / 2;
+                const y1 = conn.source.y;
+                const x2 = conn.target.x - conn.target.actualWidth / 2;
+                const y2 = conn.target.y;
+
+                // Control points for cubic Bézier curve to create smooth bends
+                const cp1x = x1 + (HORIZONTAL_SPACING / 2);
+                const cp1y = y1;
+                const cp2x = x2 - (HORIZONTAL_SPACING / 2);
+                const cp2y = y2;
+
+                const d = `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
+                path.setAttribute('d', d);
+                path.setAttribute('class', 'connection-line');
+                mainGroup.appendChild(path);
+            });
+
+            // Render nodes
+            visibleNodes.forEach(node => {
+                const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                group.setAttribute('class', 'node-group');
+                group.setAttribute('data-node-id', node.id); // Store ID for event handling
+                // Position the node group relative to the main group's origin
+                group.setAttribute('transform', `translate(${node.x - node.actualWidth / 2}, ${node.y - NODE_HEIGHT / 2})`);
+
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('width', node.actualWidth);
+                rect.setAttribute('height', NODE_HEIGHT);
+                rect.setAttribute('rx', 8); // Rounded corners for sleek look
+                rect.setAttribute('ry', 8);
+                rect.setAttribute('class', `node-rect ${node.isRoot ? 'root' : ''}`);
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', node.actualWidth / 2);
+                text.setAttribute('y', NODE_HEIGHT / 2);
+                text.setAttribute('class', 'node-text');
+                text.textContent = node.name;
+
+                group.appendChild(rect);
+                group.appendChild(text);
+
+                // Add expand/collapse arrow icon if the node has children
+                const hasChildren = node.children && node.children.length > 0;
+                if (hasChildren) {
+                    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                    // Points for a right-pointing triangle, positioned to the right of the node
+                    arrow.setAttribute('points', `${node.actualWidth - 18},${NODE_HEIGHT / 2 - 6} ${node.actualWidth - 6},${NODE_HEIGHT / 2} ${node.actualWidth - 18},${NODE_HEIGHT / 2 + 6}`);
+                    arrow.setAttribute('class', `arrow-icon has-children ${node.expanded ? 'expanded' : ''}`);
+                    group.appendChild(arrow);
+                }
+
+                mainGroup.appendChild(group);
+            });
+
+            // Add click event listeners to node groups for expanding/collapsing
+            mainGroup.querySelectorAll('.node-group').forEach(group => {
+                group.addEventListener('click', (event) => {
+                    // Stop propagation to prevent panning when clicking a node
+                    event.stopPropagation();
+                    const nodeId = group.getAttribute('data-node-id');
+                    toggleNode(mindMapData, nodeId); // Toggle the expanded state
+                    renderMindMap(); // Re-render the map to reflect the state change
+                });
+            });
+        }
+
+        // Function to find a node by ID and toggle its 'expanded' state
+        function toggleNode(data, id) {
+            if (data.id === id) {
+                if (data.children && data.children.length > 0) {
+                    data.expanded = !data.expanded; // Toggle the expanded state
+                }
+                return true; // Node found and processed
+            }
+            if (data.children) {
+                // Recursively search in children
+                for (const child of data.children) {
+                    if (toggleNode(child, id)) {
+                        return true;
+                    }
+                }
+            }
+            return false; // Node not found in this branch
+        }
+
+        // Initial setup on page load
+        window.onload = function() {
+            // Set initial expanded state for the root node ONLY
+            mindMapData.expanded = true;
+            renderMindMap(); // Initial rendering of the mind map
+
+            // Event listeners for panning the SVG
+            svg.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startDragX = e.clientX;
+                startDragY = e.clientY;
+                svg.classList.add('grabbing'); // Change cursor style
+            });
+
+            svg.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                // Calculate change in mouse position
+                const dx = e.clientX - startDragX;
+                const dy = e.clientY - startDragY;
+
+                // Accumulate pan offset
+                currentPanX += dx;
+                currentPanY += dy;
+
+                // Update start positions for the next move event
+                startDragX = e.clientX;
+                startDragY = e.clientY;
+
+                // Re-render the map with the new pan offset
+                renderMindMap();
+            });
+
+            svg.addEventListener('mouseup', () => {
+                isDragging = false;
+                svg.classList.remove('grabbing'); // Reset cursor style
+            });
+
+            svg.addEventListener('mouseleave', () => {
+                if (isDragging) { // Stop dragging if mouse leaves the SVG area
+                    isDragging = false;
+                    svg.classList.remove('grabbing'); // Reset cursor style
+                }
+            });
+
+            // Re-render on window resize to ensure responsiveness and correct centering
+            window.addEventListener('resize', renderMindMap);
+        };
+    </script>
+</body>
+</html>
